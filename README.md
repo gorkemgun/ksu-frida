@@ -41,6 +41,14 @@ This assumes that you don't have any other frida server running (f.e. by using M
 You can still run it together with frida-server but you would have to configure the gadget
 to use a different port.
 
+### Fridagisk Remapper
+
+Fridagisk has an advanced system to hide library loading inside android proc maps system. 
+This is called a library remapper.
+On a successful injection of a library, fridagisk's remapper will attempt to copy the data from procFS system and allocate and separate memory location for the target library. 
+This prevents any detection/scanning attempts which might be used by the target application to check suspecious injection or shared libraries. 
+Implementation is present at the [remapper.cpp](https://github.com/electrondefuser/fridagisk/blob/main/module/src/jni/remapper.cpp) file.
+
 ### Configuration
 
 This module also supports adding a start up delay that can delay injection of the gadget to
