@@ -19,8 +19,8 @@ dependencies {
 }
 
 task downloadFrida(type: Download) {
-    def downloadArchs = ["arm", "arm64", "x86_64", "x86"]
-    def magiskArchs = ["arm", "arm64", "x64", "x86"]
+    def downloadArchs = ["arm", "arm64"]
+    def magiskArchs = ["arm", "arm64"]
 
     def sources = downloadArchs.collect{
         arch -> "https://github.com/frida/frida/releases/download/${fridaVersion}/frida-gadget-${fridaVersion}-android-${arch}.so.xz".toString()

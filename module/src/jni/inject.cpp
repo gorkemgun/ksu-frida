@@ -17,6 +17,7 @@
 #include "child_gating.h"
 #include "xdl.h"
 #include "remapper.h"
+#include "anti_detect.h"
 
 static std::string get_process_name() {
     auto path = "/proc/self/cmdline";
@@ -89,11 +90,8 @@ void inject_lib(std::string const &lib_path, std::string const &logContext) {
 }
 
 static void inject_libs(target_config const &cfg) {
-    // We need to wait for process initialization to complete.
-    // Loading the gadget before that will freeze the process
-    // before the init has completed. This make the process
-    // undiscoverable or otherwise cause issue attaching.
     wait_for_init(cfg.app_name);
+    install_anti_detect_hooks();
 
     if (cfg.child_gating.enabled) {
         enable_child_gating(cfg.child_gating);
@@ -105,6 +103,9 @@ static void inject_libs(target_config const &cfg) {
         LOGI("Injecting %s", lib_path.c_str());
         inject_lib(lib_path, "");
     }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(700));
+    remap_hooked_system_libs();
 }
 
 bool check_and_inject(std::string const &app_name) {
