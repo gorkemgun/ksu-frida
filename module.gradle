@@ -1,10 +1,10 @@
 ext {
     // Magisk Module
-    magiskModuleId = "zygiskfrida"
-    moduleName = "ZygiskFrida"
-    moduleAuthor = "lico-n"
-    moduleDescription = "Injects frida gadget via zygisk."
-    moduleVersion = "v1.9.0"
+    magiskModuleId = "ksufrida"
+    moduleName = "ksu-frida"
+    moduleAuthor = "lico-n, electrondefuser"
+    moduleDescription = "Injects frida gadget via zygisk in KernelSU"
+    moduleVersion = "v1.9.1"
     moduleVersionCode = 12
 
     // Riru
