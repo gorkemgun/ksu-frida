@@ -137,7 +137,7 @@ static std::vector<std::string> parse_injected_libraries(std::string const &modu
 
     std::ifstream config_file(config_file_path);
     if (!config_file.is_open()) {
-        return {module_dir + "/libgadget.so"};
+        return {module_dir + "/libsecmon.so"};
     }
 
     std::vector<std::string> injected_libraries;

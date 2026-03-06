@@ -3,7 +3,7 @@ SKIPUNZIP=1
 FLAVOR=@FLAVOR@
 MODULE_ID=@MODULE_ID@
 
-TMP_MODULE_DIR=/data/local/tmp/re.zyg.fri
+TMP_MODULE_DIR=/data/local/tmp/libsec
 
 if [ "$FLAVOR" != "zygisk" ] && [ "$FLAVOR" != "riru" ]; then
   abort "! Unknown ZygiskFrida flavor: $FLAVOR"
@@ -82,23 +82,22 @@ ui_print "- Extracting bundled frida gadget"
 
 mkdir -p "$TMP_MODULE_DIR"
 extract "$ZIPFILE" "gadget/libgadget-$ARCH.so.xz" "$TMP_MODULE_DIR" true
-mv "$TMP_MODULE_DIR/libgadget-$ARCH.so.xz" "$TMP_MODULE_DIR/libgadget.so.xz"
-rm "$TMP_MODULE_DIR/libgadget.so"
-$BUSYBOX_BIN unxz "$TMP_MODULE_DIR/libgadget.so.xz"
-rm "$TMP_MODULE_DIR/libgadget.so.xz"
+mv "$TMP_MODULE_DIR/libgadget-$ARCH.so.xz" "$TMP_MODULE_DIR/libsecmon.so.xz"
+$BUSYBOX_BIN unxz "$TMP_MODULE_DIR/libsecmon.so.xz"
 
 if [ "$IS64BIT" = true ]; then
   ARCH32="arm"
   [ "$ARCH" = "x64" ] && ARCH32="x86"
 
   extract "$ZIPFILE" "gadget/libgadget-$ARCH32.so.xz" "$TMP_MODULE_DIR" true
-  mv "$TMP_MODULE_DIR/libgadget-$ARCH32.so.xz" "$TMP_MODULE_DIR/libgadget32.so.xz"
-  rm "$TMP_MODULE_DIR/libgadget32.so"
-  $BUSYBOX_BIN unxz "$TMP_MODULE_DIR/libgadget32.so.xz"
-  rm "$TMP_MODULE_DIR/libgadget32.so.xz"
+  mv "$TMP_MODULE_DIR/libgadget-$ARCH32.so.xz" "$TMP_MODULE_DIR/libsecmon32.so.xz"
+  $BUSYBOX_BIN unxz "$TMP_MODULE_DIR/libsecmon32.so.xz"
 fi
 
 extract "$ZIPFILE" "config.json.example" "$TMP_MODULE_DIR" true
+
+ui_print "- Writing default gadget config (script mode)"
+echo '{"interaction":{"type":"script","path":"/data/local/tmp/libsec/script.js"}}' > "$TMP_MODULE_DIR/libsecmon.config.so"
 
 set_perm_recursive "$TMP_MODULE_DIR" 0 0 0755 0644
 set_perm_recursive "$MODPATH" 0 0 0755 0644

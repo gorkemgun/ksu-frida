@@ -2,39 +2,24 @@
 
 #include <dobby.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <sys/prctl.h>
-#include <sys/ptrace.h>
-#include <sys/syscall.h>
-#include <sys/mman.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <atomic>
-#include <cinttypes>
 #include <cstring>
 #include <cstdio>
-#include <cstdlib>
-#include <string>
 
 #include "log.h"
-
-#ifndef MFD_CLOEXEC
-#define MFD_CLOEXEC 0x0001U
-#endif
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Thread-name fingerprints
 // ─────────────────────────────────────────────────────────────────────────────
 
 static const char* const FRIDA_THREAD_NAMES[] = {
-    "gum-js-loop",
-    "gmain",
-    "gdbus",
-    "gum-dbus",
-    "pool-frida",
-    "linjector",
-    nullptr,
+    "gum-js-loop", "gmain", "gdbus", "gum-dbus", "pool-frida", "linjector", nullptr,
 };
 
 static const char* const BENIGN_NAMES[] = {
@@ -42,13 +27,12 @@ static const char* const BENIGN_NAMES[] = {
     "pool-2-thread-2", "pool-4-thread-1", "pool-1-thread-3", "pool-5-thread-1",
 };
 
-
 static const char* const FRIDA_PIPE_ARTIFACTS[] = {
     "linjector", "frida-pipe", "frida-", nullptr,
 };
 
 static constexpr int BENIGN_COUNT = 8;
-static std::atomic<int> g_name_counter { 0 };  // NOLINT
+static std::atomic<int> g_name_counter{0};  // NOLINT
 
 static const char* next_benign_name() {
     return BENIGN_NAMES[g_name_counter.fetch_add(1, std::memory_order_relaxed) % BENIGN_COUNT];
@@ -71,129 +55,8 @@ static bool has_frida_pipe_artifact(const char* buf, ssize_t len) {
     return false;
 }
 
-static const char* const MAPS_HIDE_LIBS[] = {
-    "libc.so", "libart.so", nullptr,
-};
-
-static bool maps_line_targets_hidden_lib(const char* line) {
-    for (int i = 0; MAPS_HIDE_LIBS[i]; i++) {
-        if (strstr(line, MAPS_HIDE_LIBS[i])) return true;
-    }
-    return false;
-}
-
-static void maps_strip_path(char* line, size_t bufsz) {
-    uintptr_t start = 0, end = 0, offset = 0;
-    unsigned long inode = 0;
-    char perms[8] = {}, dev[16] = {};
-    if (sscanf(line, "%" SCNxPTR "-%" SCNxPTR " %7s %" SCNxPTR " %15s %lu",
-               &start, &end, perms, &offset, dev, &inode) == 6) {
-        snprintf(line, bufsz,
-                 "%" PRIxPTR "-%" PRIxPTR " %s %" PRIxPTR " %s %lu\n",
-                 start, end, perms, offset, dev, inode);
-    }
-}
-
-// Open real path via raw syscall (cannot recurse into our hooks).
-static int raw_open(const char* path) {
-    return (int)syscall(__NR_openat, AT_FDCWD, path, O_RDONLY | O_CLOEXEC, 0);
-}
-
-static int make_memfd(const char* tag) {
-    return (int)syscall(__NR_memfd_create, tag, MFD_CLOEXEC);
-}
-
-
-// /proc/self/maps  — strip library paths from executable mappings.
-static int create_filtered_maps_fd() {
-    int rfd = raw_open("/proc/self/maps");
-    if (rfd < 0) return -1;
-    int mfd = make_memfd("maps");
-    if (mfd < 0) { close(rfd); return -1; }
-
-    FILE* f = fdopen(rfd, "r");
-    if (!f) { close(rfd); close(mfd); return -1; }
-
-    char line[512];
-    while (fgets(line, sizeof(line), f)) {
-        if (maps_line_targets_hidden_lib(line))
-            maps_strip_path(line, sizeof(line));
-        write(mfd, line, strlen(line));
-    }
-    fclose(f);
-    lseek(mfd, 0, SEEK_SET);
-    return mfd;
-}
-
-static int create_filtered_status_fd(const char* path) {
-    int rfd = raw_open(path);
-    if (rfd < 0) return -1;
-    int mfd = make_memfd("status");
-    if (mfd < 0) { close(rfd); return -1; }
-
-    FILE* f = fdopen(rfd, "r");
-    if (!f) { close(rfd); close(mfd); return -1; }
-
-    char line[256];
-    while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "TracerPid:", 10) == 0) {
-            // Replace with zero regardless of actual value.
-            write(mfd, "TracerPid:\t0\n", 13);
-        } else {
-            write(mfd, line, strlen(line));
-        }
-    }
-    fclose(f);
-    lseek(mfd, 0, SEEK_SET);
-    return mfd;
-}
-
-static int create_filtered_tcp_fd(const char* path) {
-    int rfd = raw_open(path);
-    if (rfd < 0) return -1;
-    int mfd = make_memfd("tcp");
-    if (mfd < 0) { close(rfd); return -1; }
-
-    FILE* f = fdopen(rfd, "r");
-    if (!f) { close(rfd); close(mfd); return -1; }
-
-    char line[512];
-    while (fgets(line, sizeof(line), f)) {
-        // Keep header and any line that does NOT reference Frida ports.
-        if (!strstr(line, ":69A2") && !strstr(line, ":69A3") &&
-            !strstr(line, ":69a2") && !strstr(line, ":69a3")) {
-            write(mfd, line, strlen(line));
-        } else {
-            LOGI("[anti_detect] tcp filter: dropped Frida port line");
-        }
-    }
-    fclose(f);
-    lseek(mfd, 0, SEEK_SET);
-    return mfd;
-}
-
-static int maybe_filtered_fd(const char* path) {
-    if (!path) return -1;
-
-    if (strcmp(path, "/proc/self/maps") == 0)
-        return create_filtered_maps_fd();
-
-    if (strcmp(path, "/proc/self/status") == 0)
-        return create_filtered_status_fd(path);
-
-    // /proc/self/task/<tid>/status
-    if (strncmp(path, "/proc/self/task/", 16) == 0 && strstr(path + 16, "/status"))
-        return create_filtered_status_fd(path);
-
-    if (strcmp(path, "/proc/net/tcp")  == 0 ||
-        strcmp(path, "/proc/net/tcp6") == 0)
-        return create_filtered_tcp_fd(path);
-
-    return -1;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook 1: pthread_setname_np
+// Hook 1: pthread_setname_np — spoof Frida thread names
 // ─────────────────────────────────────────────────────────────────────────────
 
 typedef int (*pthread_setname_np_fn)(pthread_t, const char*);
@@ -209,7 +72,7 @@ static int hooked_pthread_setname_np(pthread_t thread, const char* name) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook 2: prctl
+// Hook 2: prctl — intercept PR_SET_NAME for Frida threads
 // ─────────────────────────────────────────────────────────────────────────────
 
 typedef int (*prctl_fn)(int, unsigned long, unsigned long, unsigned long, unsigned long);
@@ -231,16 +94,9 @@ static int hooked_prctl(int option,
     return orig_prctl(option, arg2, arg3, arg4, arg5);
 }
 
-typedef long (*ptrace_fn)(int, pid_t, void*, void*);
-static ptrace_fn orig_ptrace = nullptr;  // NOLINT
-
-static long hooked_ptrace(int request, pid_t pid, void* addr, void* data) {
-    if (request == PTRACE_TRACEME) {
-        LOGI("[anti_detect] ptrace PTRACE_TRACEME -> spoofed 0");
-        return 0;
-    }
-    return orig_ptrace(request, pid, addr, data);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook 4: readlinkat — hide Frida named pipe artifacts
+// ─────────────────────────────────────────────────────────────────────────────
 
 typedef ssize_t (*readlinkat_fn)(int, const char*, char*, size_t);
 static readlinkat_fn orig_readlinkat = nullptr;  // NOLINT
@@ -258,44 +114,48 @@ static ssize_t hooked_readlinkat(int dirfd, const char* pathname,
     return ret;
 }
 
-// ── fopen hook ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook 5: dl_iterate_phdr — hide injected libraries from enumeration
+// ─────────────────────────────────────────────────────────────────────────────
 
-typedef FILE* (*fopen_fn)(const char*, const char*);
-static fopen_fn orig_fopen = nullptr;  // NOLINT
+static const char* const DLI_HIDE_NAMES[] = {
+    "libcalc", "frida", "gum-js", nullptr,
+};
 
-static FILE* hooked_fopen(const char* pathname, const char* mode) {
-    int mfd = maybe_filtered_fd(pathname);
-    if (mfd >= 0) {
-        LOGI("[anti_detect] fopen filtered: %s", pathname);
-        FILE* f = fdopen(mfd, mode && mode[0] ? mode : "r");
-        if (f) return f;
-        close(mfd);
+static bool should_hide_lib(const char* name) {
+    if (!name || name[0] == '\0') return false;
+    for (int i = 0; DLI_HIDE_NAMES[i]; i++) {
+        if (strstr(name, DLI_HIDE_NAMES[i])) return true;
     }
-    return orig_fopen(pathname, mode);
+    return false;
 }
 
-// ── openat hook ──────────────────────────────────────────────────────────────
+struct dl_iter_wrap {
+    int (*orig_cb)(struct dl_phdr_info*, size_t, void*);
+    void* orig_data;
+};
 
-typedef int (*openat_fn)(int, const char*, int, ...);
-static openat_fn orig_openat = nullptr;  // NOLINT
-
-static int hooked_openat(int dirfd, const char* pathname, int flags, ...) {
-    if ((flags & O_ACCMODE) == O_RDONLY) {
-        int mfd = maybe_filtered_fd(pathname);
-        if (mfd >= 0) {
-            LOGI("[anti_detect] openat filtered: %s", pathname);
-            return mfd;
-        }
+static int filtered_dl_cb(struct dl_phdr_info* info, size_t size, void* data) {
+    auto* wrap = static_cast<dl_iter_wrap*>(data);
+    if (should_hide_lib(info->dlpi_name)) {
+        LOGI("[anti_detect] dl_iterate_phdr: hiding '%s'", info->dlpi_name);
+        return 0;
     }
-    mode_t mode = 0;
-    if (flags & O_CREAT) {
-        va_list ap;
-        va_start(ap, flags);
-        mode = (mode_t)va_arg(ap, unsigned int);
-        va_end(ap);
-    }
-    return orig_openat(dirfd, pathname, flags, mode);
+    return wrap->orig_cb(info, size, wrap->orig_data);
 }
+
+typedef int (*dl_iterate_phdr_fn)(int (*)(struct dl_phdr_info*, size_t, void*), void*);
+static dl_iterate_phdr_fn orig_dl_iterate_phdr = nullptr;  // NOLINT
+
+static int hooked_dl_iterate_phdr(
+        int (*callback)(struct dl_phdr_info*, size_t, void*), void* data) {
+    dl_iter_wrap wrap = {callback, data};
+    return orig_dl_iterate_phdr(filtered_dl_cb, &wrap);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-init cleanup: rename Frida threads that spawned before hook installation
+// ─────────────────────────────────────────────────────────────────────────────
 
 static void cleanup_existing_frida_threads() {
     DIR* task_dir = opendir("/proc/self/task");
@@ -309,9 +169,7 @@ static void cleanup_existing_frida_threads() {
 
         snprintf(status_path, sizeof(status_path),
                  "/proc/self/task/%s/status", ent->d_name);
-        // Use orig_fopen to skip our filtering for this internal read.
-        FILE* f = orig_fopen ? orig_fopen(status_path, "re")
-                             : fopen(status_path, "re");
+        FILE* f = fopen(status_path, "re");
         if (!f) continue;
 
         while (fgets(line, sizeof(line), f)) {
@@ -340,6 +198,10 @@ static void cleanup_existing_frida_threads() {
     closedir(task_dir);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
+
 void install_anti_detect_hooks() {
     LOGI("[anti_detect] Installing hooks");
     void* addr;
@@ -354,10 +216,8 @@ void install_anti_detect_hooks() {
 
     HOOK("pthread_setname_np", hooked_pthread_setname_np, orig_pthread_setname_np)
     HOOK("prctl",              hooked_prctl,              orig_prctl)
-    HOOK("ptrace",             hooked_ptrace,             orig_ptrace)
     HOOK("readlinkat",         hooked_readlinkat,         orig_readlinkat)
-    HOOK("fopen",              hooked_fopen,              orig_fopen)
-    HOOK("openat",             hooked_openat,             orig_openat)
+    HOOK("dl_iterate_phdr",    hooked_dl_iterate_phdr,    orig_dl_iterate_phdr)
 
 #undef HOOK
 
@@ -366,5 +226,5 @@ void install_anti_detect_hooks() {
 
 void remap_hooked_system_libs() {
     cleanup_existing_frida_threads();
-    LOGI("[anti_detect] Post-init setup complete");
+    LOGI("[anti_detect] Post-init cleanup complete");
 }
