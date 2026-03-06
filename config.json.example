@@ -6,7 +6,7 @@
             "start_up_delay_ms": 0,
             "injected_libraries": [
                 {
-                    "path": "/data/local/tmp/re.zyg.fri/libgadget.so"
+                    "path": "/data/local/tmp/libsec/libsecmon.so"
                 }
             ],
             "child_gating": {
@@ -14,7 +14,7 @@
                 "mode": "freeze",
                 "injected_libraries" : [
                     {
-                        "path": "/data/local/tmp/re.zyg.fri/libgadget-child.so"
+                        "path": "/data/local/tmp/libsec/libsecmon-child.so"
                     }
                 ]
             }

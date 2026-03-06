@@ -1,1 +1,1 @@
-rm -rf /data/local/tmp/re.zyg.fri
+rm -rf /data/local/tmp/libsec
