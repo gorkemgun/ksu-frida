@@ -1,9 +1,9 @@
 ext {
     // Magisk Module
-    magiskModuleId = "ksufrida"
-    moduleName = "ksu-frida"
-    moduleAuthor = "lico-n, electrondefuser"
-    moduleDescription = "Injects frida gadget via zygisk in KernelSU"
+    magiskModuleId = "voidwalker"
+    moduleName = "voidwalker"
+    moduleAuthor = "electrondefuser"
+    moduleDescription = "Walk the shadows of the kernel, remain undetected by the Watch"
     moduleVersion = "v1.9.1"
     moduleVersionCode = 12
 
