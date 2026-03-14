@@ -95,7 +95,6 @@ void remap_lib(std::string lib_path) {
 
         /* Re-apply memory protections */
         mprotect(reinterpret_cast<void *>(info.start), size, info.perms);
-
         LOGI("Allocated at address %p with size of %zu", map, size);
     }
 
