@@ -31,6 +31,10 @@ ui_print "- Extracting module files"
 extract "$ZIPFILE" 'module.prop' "$MODPATH"
 extract "$ZIPFILE" 'uninstall.sh' "$MODPATH"
 
+mkdir -p "$MODPATH/webroot"
+extract "$ZIPFILE" 'webroot/index.html' "$MODPATH/webroot" true
+extract "$ZIPFILE" 'webroot/main.js' "$MODPATH/webroot" true
+
 if [ "$FLAVOR" = "riru" ]; then
   ui_print "- Extracting riru.sh"
   extract "$ZIPFILE" 'riru.sh' "$TMPDIR"

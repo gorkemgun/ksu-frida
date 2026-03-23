@@ -106,6 +106,7 @@ afterEvaluate {
         task("prepareMagiskFiles${variantCapped}", type: Sync) {
             dependsOn("assemble$variantCapped")
             dependsOn downloadFrida
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
             def templatePath = "$rootDir/template/magisk_module"
 
@@ -140,6 +141,9 @@ afterEvaluate {
                 ]
                 filter(ReplaceTokens.class, tokens: tokens)
                 filter(FixCrLfFilter.class, eol: FixCrLfFilter.CrLf.newInstance("lf"))
+            }
+            from(templatePath + "/webroot") {
+                into 'webroot'
             }
             from("$buildDir/intermediates/stripped_native_libs/$variantCapped/out/lib") {
                 into 'lib'
