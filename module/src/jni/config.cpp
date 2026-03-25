@@ -95,6 +95,13 @@ static std::optional<target_config> deserialize_target_config(const rapidjson::V
     }
     result.enabled = enabled.GetBool();
 
+    auto &kernel_assisted_evasion = doc["kernel_assisted_evasion"];
+    if (!kernel_assisted_evasion.IsBool()) {
+        LOGE("invalid config: expected kernel_assisted_evasion members to be a bool");
+        return std::nullopt;
+    }
+    result.kernel_assisted_evasion = kernel_assisted_evasion.GetBool();
+
     auto &start_up_delay_ms = doc["start_up_delay_ms"];
     if (!start_up_delay_ms.IsUint64()) {
         LOGE("expected config target start_up_delay_ms to be an uint64");
@@ -174,6 +181,8 @@ static std::optional<target_config> load_simple_config(std::string const &module
         target_config cfg = {};
         cfg.app_name = splitted[0];
         cfg.enabled = true;
+        cfg.kernel_assisted_evasion = true;
+
         if (splitted.size() >= 2) {
             cfg.start_up_delay_ms = std::strtoul(splitted[1].c_str(), nullptr, 10);
         }

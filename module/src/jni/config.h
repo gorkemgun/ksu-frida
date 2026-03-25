@@ -16,6 +16,7 @@ struct target_config{
     bool enabled;
     std::string app_name;
     uint64_t start_up_delay_ms;
+    bool kernel_assisted_evasion;
     std::vector<std::string> injected_libraries;
     child_gating_config child_gating;
 };
