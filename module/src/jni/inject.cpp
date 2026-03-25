@@ -1,5 +1,6 @@
 #include "inject.h"
 
+#include <cstddef>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -134,7 +135,6 @@ static void unlink_staged(const std::string &staged_lib_path) {
 }
 
 // ── Injection ─────────────────────────────────────────────────────────────────
-
 void inject_lib(std::string const &lib_path, std::string const &logContext) {
     void *handle = xdl_open(lib_path.c_str(), XDL_TRY_FORCE_LOAD);
     if (handle) {
@@ -143,12 +143,10 @@ void inject_lib(std::string const &lib_path, std::string const &logContext) {
     }
 
     auto xdl_err = dlerror();
-
     // Fall back to standard dlopen.
     handle = dlopen(lib_path.c_str(), RTLD_NOW);
     if (handle) {
-        LOGI("%sInjected %s with handle %p (dlopen fallback)",
-             logContext.c_str(), lib_path.c_str(), handle);
+        LOGI("%sInjected %s with handle %p (dlopen fallback)", logContext.c_str(), lib_path.c_str(), handle);
         remap_lib(lib_path);
         return;
     }
@@ -157,11 +155,15 @@ void inject_lib(std::string const &lib_path, std::string const &logContext) {
     LOGE("%sFailed to inject %s (dlopen): %s",   logContext.c_str(), lib_path.c_str(), dlerror());
 }
 
-static void inject_libs(target_config const &cfg) {
+static void inject_libs(target_config const &cfg, pid_t pid) {
     wait_for_init(cfg.app_name);
 
     if (cfg.child_gating.enabled) {
         enable_child_gating(cfg.child_gating);
+    }
+
+    if (cfg.kernel_assisted_evasion) {
+        LOGI("KSIE enabled for PID: %d", pid);
     }
 
     delay_start_up(cfg.start_up_delay_ms);
@@ -190,8 +192,10 @@ bool check_and_inject(std::string const &app_name) {
         return false;
     }
 
+    pid_t pid = getpid();
+
     LOGI("App detected: %s", app_name.c_str());
-    LOGI("PID: %d", getpid());
+    LOGI("PID: %d", pid);
 
     auto target_config = cfg.value();
     if (!target_config.enabled) {
@@ -199,7 +203,7 @@ bool check_and_inject(std::string const &app_name) {
         return false;
     }
 
-    std::thread inject_thread(inject_libs, target_config);
+    std::thread inject_thread(inject_libs, target_config, pid);
     inject_thread.detach();
 
     return true;
