@@ -58,7 +58,7 @@ async function loadGadgetConfig() {
     } else {
         status.className = "status-err";
         status.textContent = "Not found";
-        editor.value = "";
+        editor.value = '{"interaction":{"type":"listen","address":"0.0.0.0","port":27042}}';
     }
 }
 
@@ -75,16 +75,33 @@ async function saveGadgetConfig() {
 }
 
 // ── App list ─────────────────────────────────────────────────────────────────
+var appLabels = {};
+
 async function fetchApps() {
-    var r = await exec("pm list packages -3");
+    // Get 3rd party packages with labels in one shot
+    var r = await exec(
+        "for p in $(pm list packages -3 | sed 's/package://'); do " +
+        "l=$(dumpsys package \"$p\" | grep -m1 'nonLocalizedLabel=' | sed 's/.*nonLocalizedLabel=//;s/ .*//'); " +
+        "echo \"$p|${l:-$p}\"; done"
+    );
     if (r.errno === 0 && r.stdout.trim().length > 0) {
-        allApps = r.stdout.split("\n")
-            .filter(function (l) { return l.indexOf("package:") === 0; })
-            .map(function (l) { return l.replace("package:", "").trim(); })
-            .sort();
+        allApps = [];
+        r.stdout.split("\n").forEach(function (line) {
+            line = line.trim();
+            if (!line) return;
+            var parts = line.split("|");
+            var pkg = parts[0];
+            var label = parts[1] || pkg;
+            allApps.push(pkg);
+            appLabels[pkg] = label;
+        });
+        allApps.sort(function (a, b) {
+            return (appLabels[a] || a).localeCompare(appLabels[b] || b);
+        });
     }
+    // Fallback: just package names
     if (allApps.length === 0) {
-        var r2 = await exec("pm list packages");
+        var r2 = await exec("pm list packages -3");
         if (r2.errno === 0 && r2.stdout.trim().length > 0) {
             allApps = r2.stdout.split("\n")
                 .filter(function (l) { return l.indexOf("package:") === 0; })
@@ -92,6 +109,10 @@ async function fetchApps() {
                 .sort();
         }
     }
+}
+
+function getAppLabel(pkg) {
+    return appLabels[pkg] || pkg;
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -126,7 +147,8 @@ function renderTargets() {
 
         div.innerHTML =
             '<div class="row">' +
-                '<strong>' + t.app_name + '</strong>' +
+                '<div><strong>' + getAppLabel(t.app_name) + '</strong>' +
+                '<div style="font-size:11px;color:var(--text2)">' + t.app_name + '</div></div>' +
                 '<div class="row row-gap">' +
                     '<label class="switch"><input type="checkbox"' + (t.enabled ? " checked" : "") +
                     ' onchange="updateField(' + i + ',\'enabled\',this.checked)"><span class="slider"></span></label>' +
@@ -227,7 +249,10 @@ function renderAppList() {
     var list = document.getElementById("app-list");
     var search = document.getElementById("app-search").value.toLowerCase();
 
-    var filtered = allApps.filter(function (a) { return a.toLowerCase().indexOf(search) !== -1; });
+    var filtered = allApps.filter(function (a) {
+        var label = (appLabels[a] || "").toLowerCase();
+        return a.toLowerCase().indexOf(search) !== -1 || label.indexOf(search) !== -1;
+    });
 
     if (filtered.length === 0) {
         list.innerHTML = '<div class="empty">No apps found</div>';
@@ -238,7 +263,9 @@ function renderAppList() {
     filtered.forEach(function (app) {
         var row = document.createElement("div");
         row.className = "app-row";
-        row.textContent = app;
+        var label = getAppLabel(app);
+        row.innerHTML = '<div><strong>' + label + '</strong></div>' +
+            '<div class="app-label">' + app + '</div>';
         row.onclick = function () {
             addTarget(app);
             closeAppModal();
