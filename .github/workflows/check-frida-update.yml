@@ -1,0 +1,68 @@
+name: Check Frida Updates
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest patched Frida version
+        id: frida
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/gorkemgun/knox-frida-patcher/releases/latest | jq -r '.tag_name')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "Failed to fetch latest version"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Latest patched Frida: $LATEST"
+          fi
+
+      - name: Check current version
+        if: steps.frida.outputs.skip == 'false'
+        id: check
+        run: |
+          CURRENT=$(grep 'fridaVersion =' module.gradle | awk -F'"' '{print $2}')
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "${{ steps.frida.outputs.version }}" ]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "Already on $CURRENT"
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+            echo "Update available: $CURRENT -> ${{ steps.frida.outputs.version }}"
+          fi
+
+      - name: Update Frida version
+        if: steps.frida.outputs.skip == 'false' && steps.check.outputs.update == 'true'
+        run: |
+          NEW_VERSION=${{ steps.frida.outputs.version }}
+          sed -i "s/fridaVersion = \".*\"/fridaVersion = \"${NEW_VERSION}\"/" module.gradle
+
+          # Bump module version
+          CURRENT_CODE=$(grep 'moduleVersionCode =' module.gradle | awk -F'= ' '{print $2}')
+          NEW_CODE=$((CURRENT_CODE + 1))
+          sed -i "s/moduleVersionCode = ${CURRENT_CODE}/moduleVersionCode = ${NEW_CODE}/" module.gradle
+
+          CURRENT_VER=$(grep 'moduleVersion =' module.gradle | awk -F'"' '{print $2}')
+          MAJOR=$(echo "$CURRENT_VER" | cut -d. -f1-2)
+          PATCH=$(echo "$CURRENT_VER" | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VER="${MAJOR}.${NEW_PATCH}"
+          sed -i "s/moduleVersion = \"${CURRENT_VER}\"/moduleVersion = \"${NEW_VER}\"/" module.gradle
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add module.gradle
+          git commit -m "bump Frida to ${NEW_VERSION}"
+          git push
+
+          git tag "$NEW_VER"
+          git push origin "$NEW_VER"

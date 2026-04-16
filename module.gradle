@@ -8,5 +8,5 @@ ext {
     moduleVersionCode = 13
 
     // Frida
-    fridaVersion = "17.4.0"
+    fridaVersion = "17.9.1"
 }
