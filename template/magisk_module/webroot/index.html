@@ -3,62 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KsuFrida WebUI</title>
+    <title>KsuFrida</title>
     <style>
         :root {
-            --primary-color: #2196F3;
-            --bg-color: #f5f5f5;
-            --card-bg: #ffffff;
-            --text-color: #333;
-            --border-color: #e0e0e0;
-            --danger-color: #f44336;
-            --success-color: #4CAF50;
+            --primary: #2196F3;
+            --danger: #f44336;
+            --success: #4CAF50;
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --surface2: #2a2a2a;
+            --text: #e0e0e0;
+            --text2: #999;
+            --border: #333;
         }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             padding: 16px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            justify-content: center;
         }
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-        }
+        .container { width: 100%; max-width: 600px; }
 
-        .header {
-            margin-bottom: 24px;
-            text-align: center;
-        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 22px; }
+        .header p { color: var(--text2); font-size: 13px; margin-top: 4px; }
 
         .card {
-            background-color: var(--card-bg);
-            border-radius: 8px;
+            background: var(--surface);
+            border-radius: 12px;
             padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color);
+            margin-bottom: 12px;
         }
 
-        .target-item {
+        .card-title {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 16px;
-            margin-bottom: 16px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
         }
 
-        .target-item:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-            margin-bottom: 0;
+        .card-title h3 { font-size: 15px; }
+
+        .target {
+            background: var(--surface2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
         }
+
+        .target:last-child { margin-bottom: 0; }
 
         .row {
             display: flex;
@@ -66,32 +65,43 @@
             align-items: center;
         }
 
+        .row-gap { gap: 8px; }
+
+        .field { margin-top: 10px; }
+        .field label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }
+
         .btn {
             border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 14px;
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 13px;
             cursor: pointer;
-            transition: background 0.2s;
+            color: white;
+            background: var(--border);
         }
 
-        .btn-primary { background-color: var(--primary-color); color: white; }
-        .btn-danger { background-color: var(--danger-color); color: white; }
-        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-primary { background: var(--primary); }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
 
-        input[type="text"], input[type="number"], select {
+        input[type="text"], input[type="number"], select, textarea {
             width: 100%;
             padding: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            box-sizing: border-box;
-            margin-top: 4px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
         }
+
+        textarea { resize: vertical; min-height: 50px; }
 
         .switch {
             position: relative;
             display: inline-block;
-            width: 40px;
+            width: 36px;
             height: 20px;
         }
 
@@ -100,74 +110,76 @@
         .slider {
             position: absolute;
             cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
+            inset: 0;
+            background: #555;
             border-radius: 20px;
+            transition: .3s;
         }
 
         .slider:before {
-            position: absolute;
             content: "";
-            height: 16px; width: 16px;
-            left: 2px; bottom: 2px;
-            background-color: white;
-            transition: .4s;
+            position: absolute;
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
             border-radius: 50%;
+            transition: .3s;
         }
 
-        input:checked + .slider { background-color: var(--primary-color); }
-        input:checked + .slider:before { transform: translateX(20px); }
+        input:checked + .slider { background: var(--primary); }
+        input:checked + .slider:before { transform: translateX(16px); }
 
-        .lib-tag {
-            background: #eee;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            margin-right: 4px;
-            display: inline-block;
-            margin-bottom: 4px;
+        .child-panel {
+            background: var(--bg);
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            border: 1px dashed var(--border);
         }
 
-        .app-list-modal {
+        .modal-overlay {
             display: none;
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
+            inset: 0;
+            background: rgba(0,0,0,0.7);
             justify-content: center;
             align-items: center;
             z-index: 1000;
         }
 
-        .modal-content {
-            background: white;
+        .modal {
+            background: var(--surface);
             width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-            border-radius: 8px;
+            max-width: 480px;
+            max-height: 75vh;
+            border-radius: 12px;
             padding: 16px;
-        }
-
-        .app-item {
             display: flex;
-            align-items: center;
-            padding: 8px;
-            border-bottom: 1px solid #eee;
+            flex-direction: column;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            flex: 1;
+            margin-top: 10px;
+        }
+
+        .app-row {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
             cursor: pointer;
+            font-size: 13px;
         }
 
-        .app-item:hover { background: #f0f0f0; }
+        .app-row:hover { background: var(--surface2); }
+        .app-row .app-label { font-size: 12px; color: var(--text2); }
 
-        .app-icon { width: 32px; height: 32px; margin-right: 12px; }
+        .empty { color: var(--text2); text-align: center; padding: 24px 0; font-size: 13px; }
 
-        .child-gating-panel {
-            background: #f9f9f9;
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 8px;
-            border: 1px dashed #ccc;
-        }
+        .status-ok { color: var(--success); }
+        .status-err { color: var(--danger); }
     </style>
 </head>
 <body>
@@ -178,46 +190,40 @@
         </div>
 
         <div class="card">
-            <div class="row">
+            <div class="card-title">
                 <h3>Targets</h3>
-                <button class="btn btn-primary" onclick="showAppList()">Add Target</button>
+                <button class="btn btn-primary btn-sm" id="btn-add">+ Add</button>
             </div>
-            <div id="targets-container">
-                <!-- Targets will be loaded here -->
+            <div id="targets"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <h3>Gadget Config</h3>
+                <span id="gadget-status"></span>
+            </div>
+            <textarea id="gadget-editor" rows="4" placeholder="Loading..."></textarea>
+            <div style="margin-top:8px;">
+                <button class="btn btn-primary btn-sm" id="btn-save-gadget">Save Gadget Config</button>
             </div>
         </div>
 
         <div class="card">
-            <h3>Gadget Config</h3>
-            <p>Path: <code>/data/local/tmp/libsec/libsecmon.config.so</code></p>
-            <div id="gadget-config-status">Loading...</div>
-            <textarea id="gadget-config-editor" style="width:100%; height:80px; margin-top:8px;"></textarea>
-            <div class="row" style="margin-top:8px;">
-                <button class="btn btn-primary" onclick="saveGadgetConfig()">Save Gadget Config</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>Global Config</h3>
-            <p>Config Path: <code>/data/local/tmp/libsec/config.json</code></p>
             <div class="row">
-                <button class="btn btn-success" onclick="saveConfig()">Save Changes</button>
-                <button class="btn" onclick="loadConfig()">Reload</button>
+                <button class="btn btn-success" id="btn-save">Save All</button>
+                <button class="btn" id="btn-reload">Reload</button>
             </div>
         </div>
     </div>
 
-    <!-- App List Modal -->
-    <div id="app-modal" class="app-list-modal">
-        <div class="modal-content">
+    <div class="modal-overlay" id="app-modal">
+        <div class="modal">
             <div class="row">
                 <h3>Select App</h3>
-                <button onclick="closeAppModal()">Close</button>
+                <button class="btn btn-sm" id="btn-close-modal">Close</button>
             </div>
-            <input type="text" id="app-search" placeholder="Search apps..." oninput="filterApps()">
-            <div id="app-list">
-                <!-- Apps will be loaded here -->
-            </div>
+            <input type="text" id="app-search" placeholder="Search packages...">
+            <div class="modal-body" id="app-list"></div>
         </div>
     </div>
 
