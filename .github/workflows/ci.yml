@@ -56,7 +56,7 @@ jobs:
         run: |
           VERSION=${{ steps.module-version.outputs.version }}
           VERSION_CODE=${{ steps.module-version.outputs.versionCode }}
-          printf '{\n    "version": "%s",\n    "versionCode": %s,\n    "zipUrl": "https://github.com/gorkemgun/ksu-frida/releases/download/%s/KsuFrida-%s.zip",\n    "changelog": "https://github.com/gorkemgun/ksu-frida/releases/tag/%s"\n}\n' "$VERSION" "$VERSION_CODE" "$VERSION" "$VERSION" "$VERSION" > update.json
+          printf '{\n    "version": "%s",\n    "versionCode": %s,\n    "zipUrl": "https://github.com/gorkemgun/ksu-frida/releases/download/%s/KsuFrida-%s.zip",\n    "changelog": "https://raw.githubusercontent.com/gorkemgun/ksu-frida/main/changelog.md"\n}\n' "$VERSION" "$VERSION_CODE" "$VERSION" "$VERSION" > update.json
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout main
