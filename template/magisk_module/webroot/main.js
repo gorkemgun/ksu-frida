@@ -1,219 +1,230 @@
 const CONFIG_PATH = "/data/local/tmp/libsec/config.json";
 const GADGET_CONFIG_PATH = "/data/local/tmp/libsec/libsecmon.config.so";
+
 let config = { targets: [] };
 let allApps = [];
+let callbackId = 0;
 
-async function exec(cmd) {
-    return new Promise((resolve) => {
-        ksu.exec(cmd, (errno, stdout, stderr) => {
-            resolve({ errno, stdout, stderr });
-        });
+// ── KSU exec wrapper using string-based callback registration ────────────────
+function exec(cmd) {
+    return new Promise(function (resolve) {
+        var name = "_ksu_cb_" + (++callbackId);
+        window[name] = function (errno, stdout, stderr) {
+            delete window[name];
+            resolve({ errno: errno, stdout: stdout, stderr: stderr });
+        };
+        ksu.exec(cmd, "{}", name);
     });
 }
 
-async function loadGadgetConfig() {
-    const { errno, stdout, stderr } = await exec(`cat ${GADGET_CONFIG_PATH}`);
-    const status = document.getElementById('gadget-config-status');
-    const editor = document.getElementById('gadget-config-editor');
-    if (errno === 0) {
-        status.innerHTML = '<span style="color:green;">Config exists and readable</span>';
-        editor.value = stdout;
-    } else {
-        status.innerHTML = '<span style="color:red;">Config not found or error: ' + stderr + '</span>';
-        editor.value = "";
-    }
-}
-
-async function saveGadgetConfig() {
-    const content = document.getElementById('gadget-config-editor').value;
-    const escaped = content.replace(/'/g, "'\\''");
-    const { errno, stdout, stderr } = await exec(`echo '${escaped}' > ${GADGET_CONFIG_PATH}`);
-    if (errno === 0) {
-        ksu.toast("Gadget config saved");
-        loadGadgetConfig();
-    } else {
-        ksu.toast("Failed to save gadget config: " + stderr);
-    }
-}
-
+// ── Config I/O ───────────────────────────────────────────────────────────────
 async function loadConfig() {
-    const { errno, stdout, stderr } = await exec(`cat ${CONFIG_PATH}`);
-    if (errno === 0) {
+    var r = await exec("cat " + CONFIG_PATH);
+    if (r.errno === 0 && r.stdout.trim().length > 0) {
         try {
-            config = JSON.parse(stdout);
+            config = JSON.parse(r.stdout);
         } catch (e) {
-            console.error("Failed to parse config", e);
-            ksu.toast("Failed to parse config: " + e.message);
+            ksu.toast("Config parse error: " + e.message);
+            return;
         }
     } else {
-        console.log("Config not found or readable, using default");
-        // Try to load example if real one doesn't exist
-        const example = await exec(`cat /data/local/tmp/libsec/config.json.example`);
-        if (example.errno === 0) {
-            config = JSON.parse(example.stdout);
+        var ex = await exec("cat /data/local/tmp/libsec/config.json.example");
+        if (ex.errno === 0) {
+            try { config = JSON.parse(ex.stdout); } catch (_) {}
         }
     }
     renderTargets();
 }
 
 async function saveConfig() {
-    const configStr = JSON.stringify(config, null, 4);
-    // Escape for shell
-    const escapedConfig = configStr.replace(/'/g, "'\\''");
-    const { errno, stdout, stderr } = await exec(`echo '${escapedConfig}' > ${CONFIG_PATH}`);
-    if (errno === 0) {
-        ksu.toast("Config saved successfully");
+    var json = JSON.stringify(config, null, 4);
+    var escaped = json.replace(/'/g, "'\\''");
+    var r = await exec("echo '" + escaped + "' > " + CONFIG_PATH);
+    if (r.errno === 0) {
+        ksu.toast("Config saved");
     } else {
-        ksu.toast("Failed to save config: " + stderr);
+        ksu.toast("Save failed: " + r.stderr);
     }
 }
+
+async function loadGadgetConfig() {
+    var status = document.getElementById("gadget-status");
+    var editor = document.getElementById("gadget-editor");
+    var r = await exec("cat " + GADGET_CONFIG_PATH);
+    if (r.errno === 0) {
+        status.className = "status-ok";
+        status.textContent = "OK";
+        editor.value = r.stdout;
+    } else {
+        status.className = "status-err";
+        status.textContent = "Not found";
+        editor.value = '{"interaction":{"type":"listen","address":"0.0.0.0","port":27042}}';
+    }
+}
+
+async function saveGadgetConfig() {
+    var content = document.getElementById("gadget-editor").value;
+    var escaped = content.replace(/'/g, "'\\''");
+    var r = await exec("echo '" + escaped + "' > " + GADGET_CONFIG_PATH);
+    if (r.errno === 0) {
+        ksu.toast("Gadget config saved");
+        loadGadgetConfig();
+    } else {
+        ksu.toast("Failed: " + r.stderr);
+    }
+}
+
+// ── App list ─────────────────────────────────────────────────────────────────
+var appLabels = {};
 
 async function fetchApps() {
-    const { errno, stdout, stderr } = await exec("pm list packages");
-    if (errno === 0 && stdout.trim().length > 0) {
-        allApps = stdout.split('\n')
-            .filter(line => line.startsWith('package:'))
-            .map(line => line.replace('package:', '').trim())
-            .sort();
-    } else {
-        ksu.toast("Failed to load app list: " + (stderr || "empty response"));
+    // Get 3rd party packages with labels in one shot
+    var r = await exec(
+        "for p in $(pm list packages -3 | sed 's/package://'); do " +
+        "l=$(dumpsys package \"$p\" | grep -m1 'nonLocalizedLabel=' | sed 's/.*nonLocalizedLabel=//;s/ .*//'); " +
+        "echo \"$p|${l:-$p}\"; done"
+    );
+    if (r.errno === 0 && r.stdout.trim().length > 0) {
+        allApps = [];
+        r.stdout.split("\n").forEach(function (line) {
+            line = line.trim();
+            if (!line) return;
+            var parts = line.split("|");
+            var pkg = parts[0];
+            var label = parts[1] || pkg;
+            allApps.push(pkg);
+            appLabels[pkg] = label;
+        });
+        allApps.sort(function (a, b) {
+            return (appLabels[a] || a).localeCompare(appLabels[b] || b);
+        });
+    }
+    // Fallback: just package names
+    if (allApps.length === 0) {
+        var r2 = await exec("pm list packages -3");
+        if (r2.errno === 0 && r2.stdout.trim().length > 0) {
+            allApps = r2.stdout.split("\n")
+                .filter(function (l) { return l.indexOf("package:") === 0; })
+                .map(function (l) { return l.replace("package:", "").trim(); })
+                .sort();
+        }
     }
 }
 
+function getAppLabel(pkg) {
+    return appLabels[pkg] || pkg;
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
 function renderTargets() {
-    const container = document.getElementById('targets-container');
-    container.innerHTML = '';
+    var container = document.getElementById("targets");
+    container.innerHTML = "";
 
-    config.targets.forEach((target, index) => {
-        const item = document.createElement('div');
-        item.className = 'target-item';
-        item.innerHTML = `
-            <div class="row">
-                <strong>${target.app_name}</strong>
-                <div class="row" style="gap: 8px;">
-                    <label class="switch">
-                        <input type="checkbox" ${target.enabled ? 'checked' : ''} onchange="toggleTarget(${index}, this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                    <button class="btn btn-danger" onclick="removeTarget(${index})">Remove</button>
-                </div>
-            </div>
-            <div class="row">
-                <span>Kernel Assisted Evasion</span>
-                <label class="switch">
-                    <input type="checkbox" ${target.kernel_assisted_evasion ? 'checked' : ''} onchange="toggleKsie(${index}, this.checked)">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div>
-                <label>Delay (ms):</label>
-                <input type="number" value="${target.start_up_delay_ms}" onchange="updateDelay(${index}, this.value)">
-            </div>
-            <div>
-                <label>Injected Libraries (one per line):</label>
-                <textarea style="width:100%; height:60px;" onchange="updateLibs(${index}, this.value)">${target.injected_libraries.map(l => l.path).join('\n')}</textarea>
-            </div>
-            <div class="child-gating-panel">
-                <div class="row">
-                    <span>Child Gating</span>
-                    <label class="switch">
-                        <input type="checkbox" ${target.child_gating?.enabled ? 'checked' : ''} onchange="toggleChildGating(${index}, this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                ${target.child_gating?.enabled ? `
-                    <label>Mode:</label>
-                    <select onchange="updateChildGatingMode(${index}, this.value)">
-                        <option value="freeze" ${target.child_gating.mode === 'freeze' ? 'selected' : ''}>Freeze</option>
-                        <option value="relax" ${target.child_gating.mode === 'relax' ? 'selected' : ''}>Relax</option>
-                    </select>
-                    <label>Child Libs (one per line):</label>
-                    <textarea style="width:100%; height:40px;" onchange="updateChildLibs(${index}, this.value)">${target.child_gating.injected_libraries?.map(l => l.path).join('\n') || ''}</textarea>
-                ` : ''}
-            </div>
-        `;
-        container.appendChild(item);
-    });
-}
-
-function toggleTarget(index, enabled) {
-    config.targets[index].enabled = enabled;
-}
-
-function toggleKsie(index, enabled) {
-    config.targets[index].kernel_assisted_evasion = enabled;
-}
-
-function removeTarget(index) {
-    config.targets.splice(index, 1);
-    renderTargets();
-}
-
-function updateDelay(index, value) {
-    config.targets[index].start_up_delay_ms = parseInt(value) || 0;
-}
-
-function updateLibs(index, value) {
-    config.targets[index].injected_libraries = value.split('\n')
-        .filter(line => line.trim() !== '')
-        .map(line => ({ path: line.trim() }));
-}
-
-function toggleChildGating(index, enabled) {
-    if (!config.targets[index].child_gating) {
-        config.targets[index].child_gating = { enabled: false, mode: 'freeze', injected_libraries: [] };
+    if (config.targets.length === 0) {
+        container.innerHTML = '<div class="empty">No targets configured. Tap + Add to start.</div>';
+        return;
     }
-    config.targets[index].child_gating.enabled = enabled;
-    renderTargets();
-}
 
-function updateChildGatingMode(index, value) {
-    config.targets[index].child_gating.mode = value;
-}
+    config.targets.forEach(function (t, i) {
+        var div = document.createElement("div");
+        div.className = "target";
 
-function updateChildLibs(index, value) {
-    config.targets[index].child_gating.injected_libraries = value.split('\n')
-        .filter(line => line.trim() !== '')
-        .map(line => ({ path: line.trim() }));
-}
+        var childHtml = "";
+        if (t.child_gating && t.child_gating.enabled) {
+            var childLibs = (t.child_gating.injected_libraries || [])
+                .map(function (l) { return l.path; }).join("\n");
+            childHtml =
+                '<div class="field"><label>Mode</label>' +
+                '<select onchange="updateField(' + i + ',\'child_mode\',this.value)">' +
+                '<option value="freeze"' + (t.child_gating.mode === "freeze" ? " selected" : "") + '>Freeze</option>' +
+                '<option value="relax"' + (t.child_gating.mode === "relax" ? " selected" : "") + '>Relax</option>' +
+                '</select></div>' +
+                '<div class="field"><label>Child Libraries</label>' +
+                '<textarea onchange="updateField(' + i + ',\'child_libs\',this.value)">' + childLibs + '</textarea></div>';
+        }
 
-function showAppList() {
-    document.getElementById('app-modal').style.display = 'flex';
-    renderAppList();
-}
+        var libs = t.injected_libraries.map(function (l) { return l.path; }).join("\n");
 
-function closeAppModal() {
-    document.getElementById('app-modal').style.display = 'none';
-}
+        div.innerHTML =
+            '<div class="row">' +
+                '<div><strong>' + getAppLabel(t.app_name) + '</strong>' +
+                '<div style="font-size:11px;color:var(--text2)">' + t.app_name + '</div></div>' +
+                '<div class="row row-gap">' +
+                    '<label class="switch"><input type="checkbox"' + (t.enabled ? " checked" : "") +
+                    ' onchange="updateField(' + i + ',\'enabled\',this.checked)"><span class="slider"></span></label>' +
+                    '<button class="btn btn-danger btn-sm" onclick="removeTarget(' + i + ')">X</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="row" style="margin-top:8px">' +
+                '<span style="font-size:12px;color:var(--text2)">Kernel Evasion</span>' +
+                '<label class="switch"><input type="checkbox"' + (t.kernel_assisted_evasion ? " checked" : "") +
+                ' onchange="updateField(' + i + ',\'ksie\',this.checked)"><span class="slider"></span></label>' +
+            '</div>' +
+            '<div class="field"><label>Delay (ms)</label>' +
+                '<input type="number" value="' + (t.start_up_delay_ms || 0) +
+                '" onchange="updateField(' + i + ',\'delay\',this.value)"></div>' +
+            '<div class="field"><label>Injected Libraries</label>' +
+                '<textarea onchange="updateField(' + i + ',\'libs\',this.value)">' + libs + '</textarea></div>' +
+            '<div class="child-panel">' +
+                '<div class="row"><span style="font-size:12px">Child Gating</span>' +
+                '<label class="switch"><input type="checkbox"' +
+                (t.child_gating && t.child_gating.enabled ? " checked" : "") +
+                ' onchange="updateField(' + i + ',\'child_enabled\',this.checked)"><span class="slider"></span></label>' +
+                '</div>' + childHtml +
+            '</div>';
 
-function renderAppList() {
-    const list = document.getElementById('app-list');
-    list.innerHTML = '';
-    const search = document.getElementById('app-search').value.toLowerCase();
-    
-    allApps.filter(app => app.toLowerCase().includes(search)).forEach(app => {
-        const item = document.createElement('div');
-        item.className = 'app-item';
-        item.innerText = app;
-        item.onclick = () => {
-            addTarget(app);
-            closeAppModal();
-        };
-        list.appendChild(item);
+        container.appendChild(div);
     });
 }
 
-function filterApps() {
-    renderAppList();
+// ── Data updates ─────────────────────────────────────────────────────────────
+function updateField(i, field, value) {
+    var t = config.targets[i];
+    switch (field) {
+        case "enabled":
+            t.enabled = value;
+            break;
+        case "ksie":
+            t.kernel_assisted_evasion = value;
+            break;
+        case "delay":
+            t.start_up_delay_ms = parseInt(value) || 0;
+            break;
+        case "libs":
+            t.injected_libraries = value.split("\n")
+                .filter(function (l) { return l.trim() !== ""; })
+                .map(function (l) { return { path: l.trim() }; });
+            break;
+        case "child_enabled":
+            if (!t.child_gating) {
+                t.child_gating = { enabled: false, mode: "freeze", injected_libraries: [] };
+            }
+            t.child_gating.enabled = value;
+            renderTargets();
+            break;
+        case "child_mode":
+            t.child_gating.mode = value;
+            break;
+        case "child_libs":
+            t.child_gating.injected_libraries = value.split("\n")
+                .filter(function (l) { return l.trim() !== ""; })
+                .map(function (l) { return { path: l.trim() }; });
+            break;
+    }
 }
 
-function addTarget(packageName) {
-    if (config.targets.some(t => t.app_name === packageName)) {
-        ksu.toast("App already in list");
+function removeTarget(i) {
+    config.targets.splice(i, 1);
+    renderTargets();
+}
+
+function addTarget(pkg) {
+    if (config.targets.some(function (t) { return t.app_name === pkg; })) {
+        ksu.toast("Already added");
         return;
     }
     config.targets.push({
-        app_name: packageName,
+        app_name: pkg,
         enabled: true,
         kernel_assisted_evasion: false,
         start_up_delay_ms: 0,
@@ -223,11 +234,62 @@ function addTarget(packageName) {
     renderTargets();
 }
 
-// Initialize
-window.onload = async () => {
-    if (typeof ksu === 'undefined') {
-        alert("This page must be opened in KernelSU Manager.");
+// ── Modal ────────────────────────────────────────────────────────────────────
+function showAppList() {
+    document.getElementById("app-modal").style.display = "flex";
+    document.getElementById("app-search").value = "";
+    renderAppList();
+}
+
+function closeAppModal() {
+    document.getElementById("app-modal").style.display = "none";
+}
+
+function renderAppList() {
+    var list = document.getElementById("app-list");
+    var search = document.getElementById("app-search").value.toLowerCase();
+
+    var filtered = allApps.filter(function (a) {
+        var label = (appLabels[a] || "").toLowerCase();
+        return a.toLowerCase().indexOf(search) !== -1 || label.indexOf(search) !== -1;
+    });
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty">No apps found</div>';
         return;
     }
-    await Promise.all([loadConfig(), loadGadgetConfig(), fetchApps()]);
+
+    list.innerHTML = "";
+    filtered.forEach(function (app) {
+        var row = document.createElement("div");
+        row.className = "app-row";
+        var label = getAppLabel(app);
+        row.innerHTML = '<div><strong>' + label + '</strong></div>' +
+            '<div class="app-label">' + app + '</div>';
+        row.onclick = function () {
+            addTarget(app);
+            closeAppModal();
+        };
+        list.appendChild(row);
+    });
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.onload = function () {
+    if (typeof ksu === "undefined") {
+        document.body.innerHTML = '<div style="text-align:center;padding:40px;color:#f44336;">' +
+            'This page must be opened in KernelSU Manager.</div>';
+        return;
+    }
+
+    document.getElementById("btn-add").onclick = showAppList;
+    document.getElementById("btn-save").onclick = saveConfig;
+    document.getElementById("btn-reload").onclick = function () { loadConfig(); loadGadgetConfig(); };
+    document.getElementById("btn-save-gadget").onclick = saveGadgetConfig;
+    document.getElementById("btn-close-modal").onclick = closeAppModal;
+    document.getElementById("app-search").oninput = renderAppList;
+
+    loadConfig();
+    loadGadgetConfig();
+    fetchApps();
 };
