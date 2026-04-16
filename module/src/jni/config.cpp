@@ -1,9 +1,10 @@
 #include "config.h"
 
-#include <string>
 #include <fstream>
-#include <sstream>
 #include <optional>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "rapidjson/document.h"
 #include "rapidjson/istreamwrapper.h"
