@@ -137,7 +137,8 @@ function renderTargets() {
                 '<div class="field"><label>Mode</label>' +
                 '<select onchange="updateField(' + i + ',\'child_mode\',this.value)">' +
                 '<option value="freeze"' + (t.child_gating.mode === "freeze" ? " selected" : "") + '>Freeze</option>' +
-                '<option value="relax"' + (t.child_gating.mode === "relax" ? " selected" : "") + '>Relax</option>' +
+                '<option value="kill"' + (t.child_gating.mode === "kill" ? " selected" : "") + '>Kill</option>' +
+                '<option value="inject"' + (t.child_gating.mode === "inject" ? " selected" : "") + '>Inject</option>' +
                 '</select></div>' +
                 '<div class="field"><label>Child Libraries</label>' +
                 '<textarea onchange="updateField(' + i + ',\'child_libs\',this.value)">' + childLibs + '</textarea></div>';
