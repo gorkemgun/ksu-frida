@@ -14,7 +14,6 @@ apply from: file(rootProject.file('module.gradle'))
 
 dependencies {
     implementation 'dev.rikka.ndk.thirdparty:cxx:1.2.0'
-    implementation("dev.rikka.ndk:riru:26.0.0")
     implementation("io.github.vvb2060.ndk:dobby:1.2")
 }
 
@@ -57,7 +56,6 @@ android {
             ndkBuild {
                 arguments += "MODULE_VERSION_CODE=$moduleVersionCode"
                 arguments += "MODULE_VERSION_NAME=$moduleVersion"
-                arguments += "RIRU_API_VERSION=$moduleMaxRiruApiVersion"
             }
         }
 
@@ -79,10 +77,6 @@ android {
                     arguments += "API=${name.toLowerCase()}"
                 }
             }
-        }
-
-        create("Riru") {
-            dimension = "api"
         }
 
         create("Zygisk") {
@@ -116,7 +110,6 @@ afterEvaluate {
             }
             from(templatePath) {
                 exclude 'module.prop'
-                exclude 'riru.sh'
                 exclude 'customize.sh'
                 exclude 'verify.sh'
             }
@@ -151,19 +144,6 @@ afterEvaluate {
             from("$rootDir/gadget") {
                 exclude '.gitkeep'
                 into 'gadget'
-            }
-            if (flavorLowered == "riru") {
-                from(templatePath) {
-                    include("riru.sh")
-                    def tokens = [
-                            "RIRU_MODULE_LIB_NAME"              : "zygiskfrida",
-                            "RIRU_MODULE_API_VERSION"           : moduleMaxRiruApiVersion.toString(),
-                            "RIRU_MODULE_MIN_API_VERSION"       : moduleMinRiruApiVersion.toString(),
-                            "RIRU_MODULE_MIN_RIRU_VERSION_NAME" : moduleMinRiruVersionName,
-                    ]
-                    filter(ReplaceTokens.class, tokens: tokens)
-                    filter(FixCrLfFilter.class, eol: FixCrLfFilter.CrLf.newInstance("lf"))
-                }
             }
             doLast {
                 fileTree("$magiskDir/lib").visit { f ->
