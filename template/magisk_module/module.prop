@@ -4,3 +4,4 @@ version=${version}
 versionCode=${versionCode}
 author=${author}
 description=${description}
+updateJson=https://raw.githubusercontent.com/gorkemgun/ksu-frida/main/update.json
