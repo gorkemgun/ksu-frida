@@ -70,6 +70,8 @@ You can also build and install the module to your device directly with `./gradle
 
 ## Credits
 
+- [lico-n](https://github.com/lico-n) — Original author of [ZygiskFrida](https://github.com/lico-n/ZygiskFrida)
+- [electrondefuser](https://github.com/electrondefuser) — Library remapper, child gating, advanced config system
 - Inspired by https://github.com/Perfare/Zygisk-Il2CppDumper
 - https://github.com/hexhacking/xDL
 
