@@ -69,12 +69,14 @@ async function saveConfig() {
 }
 
 async function fetchApps() {
-    // Get list of installed apps
-    const { errno, stdout, stderr } = await exec("pm list packages -e");
-    if (errno === 0) {
+    const { errno, stdout, stderr } = await exec("pm list packages");
+    if (errno === 0 && stdout.trim().length > 0) {
         allApps = stdout.split('\n')
             .filter(line => line.startsWith('package:'))
-            .map(line => line.replace('package:', '').trim());
+            .map(line => line.replace('package:', '').trim())
+            .sort();
+    } else {
+        ksu.toast("Failed to load app list: " + (stderr || "empty response"));
     }
 }
 
@@ -95,6 +97,13 @@ function renderTargets() {
                     </label>
                     <button class="btn btn-danger" onclick="removeTarget(${index})">Remove</button>
                 </div>
+            </div>
+            <div class="row">
+                <span>Kernel Assisted Evasion</span>
+                <label class="switch">
+                    <input type="checkbox" ${target.kernel_assisted_evasion ? 'checked' : ''} onchange="toggleKsie(${index}, this.checked)">
+                    <span class="slider"></span>
+                </label>
             </div>
             <div>
                 <label>Delay (ms):</label>
@@ -129,6 +138,10 @@ function renderTargets() {
 
 function toggleTarget(index, enabled) {
     config.targets[index].enabled = enabled;
+}
+
+function toggleKsie(index, enabled) {
+    config.targets[index].kernel_assisted_evasion = enabled;
 }
 
 function removeTarget(index) {
@@ -202,6 +215,7 @@ function addTarget(packageName) {
     config.targets.push({
         app_name: packageName,
         enabled: true,
+        kernel_assisted_evasion: false,
         start_up_delay_ms: 0,
         injected_libraries: [{ path: "/data/local/tmp/libsec/libsecmon.so" }],
         child_gating: { enabled: false, mode: "freeze", injected_libraries: [] }
@@ -215,7 +229,5 @@ window.onload = async () => {
         alert("This page must be opened in KernelSU Manager.");
         return;
     }
-    await loadConfig();
-    await loadGadgetConfig();
-    await fetchApps();
+    await Promise.all([loadConfig(), loadGadgetConfig(), fetchApps()]);
 };
