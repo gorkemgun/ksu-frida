@@ -29,9 +29,9 @@ jobs:
           echo "version=$MODULE_VERSION" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
-          name: ZygiskFrida-${{ steps.module-version.outputs.version }}-release
+          name: KsuFrida-${{ steps.module-version.outputs.version }}-zygisk-release
           path: out/magisk_module_zygisk_release
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
-          name: ZygiskFrida-${{ steps.module-version.outputs.version }}-riru-release
+          name: KsuFrida-${{ steps.module-version.outputs.version }}-riru-release
           path: out/magisk_module_riru_release
