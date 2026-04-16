@@ -1,77 +1,92 @@
-# ZygiskFrida
+# KsuFrida
 
-> [Frida](https://frida.re) is a dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers
+Frida gadget injection module for KernelSU/Magisk via Zygisk.
 
-> [Zygisk](https://github.com/topjohnwu/Magisk) part of Magisk allows you to run code in every Android application's Process.
+- Gadget is not embedded into the APK — APK integrity/signature checks still pass
+- No ptrace — avoids ptrace-based detection
+- Library remapping hides injected libraries from /proc/self/maps
+- Configurable injection delay, child gating, and multiple library injection
+- WebUI for managing targets from KernelSU Manager
 
+## Prerequisites
 
-## Introduction
+- Rooted device with KernelSU or Magisk
+- Zygisk enabled
 
-[ZygiskFrida](README.md) is a zygisk module allowing you to inject frida gadget in Android applications in a
-more stealthy way.
+## Quick Start
 
-- The gadget is not embedded into the APK itself. So APK Integrity/Signature checks will still pass.
-- The process is not being ptraced like it is with frida-server. Avoiding ptrace based detection.
-- Control about the injection time of the gadget.
-- Allows you to load multiple arbitrary libraries into the process.
+1. Download the latest release from the [Releases](https://github.com/gorkemgun/ksu-frida/releases) page
+2. Install the ZIP via KernelSU/Magisk Manager
+3. Reboot
 
-This repo also provides a [Riru](https://github.com/RikkaApps/Riru) flavor in case you are still
-using riru with an older magisk version rather than zygisk.
+### Option A: WebUI (KernelSU only)
 
-## How to use the module
+Open KernelSU Manager → Modules → KsuFrida → WebUI. Add target apps, configure delay, toggle child gating.
 
-### Prerequisites
-- Rooted device/emulator
-- Zygisk available and enabled
+### Option B: Manual config
 
-### Quick start
-- Download the latest release from the [Release Page](https://github.com/lico-n/ZygiskFrida/releases)\
-  If you are using riru instead of zygisk choose the riru-release. Otherwise choose the normal version.
-- Transfer the ZygiskFrida zip file to your device and install it via Magisk.
-- Reboot after install
-- Create the config file and adjust the package name to your target app (replace `your.target.application` in the commands)
 ```shell
-adb shell 'su -c cp /data/local/tmp/re.zyg.fri/config.json.example /data/local/tmp/re.zyg.fri/config.json'
-adb shell 'su -c sed -i s/com.example.package/your.target.application/ /data/local/tmp/re.zyg.fri/config.json'
+adb shell su -c 'cp /data/local/tmp/libsec/config.json.example /data/local/tmp/libsec/config.json'
+adb shell su -c "sed -i 's/com.example.package/your.target.app/' /data/local/tmp/libsec/config.json"
 ```
-- Launch your app. It will pause at startup allowing you to attach
-  f.e. `frida -U -N your.target.application` or `frida -U -n Gadget`
 
-This assumes that you don't have any other frida server running (f.e. by using MagiskFrida).
-You can still run it together with frida-server but you would have to configure the gadget
-to use a different port.
+### Connecting
 
-### Fridagisk Remapper
+The default gadget config uses **listen mode** on port 27042. After opening the target app:
 
-Fridagisk has an advanced system to hide library loading inside android proc maps system. 
-This is called a library remapper.
-On a successful injection of a library, fridagisk's remapper will attempt to copy the data from procFS system and allocate and separate memory location for the target library. 
-This prevents any detection/scanning attempts which might be used by the target application to check suspecious injection or shared libraries. 
-Implementation is present at the [remapper.cpp](https://github.com/electrondefuser/fridagisk/blob/main/module/src/jni/remapper.cpp) file.
+```shell
+adb forward tcp:27042 tcp:27042
+frida -H 127.0.0.1:27042 -n Gadget -l your_script.js
+```
 
-### Configuration
+## Configuration
 
-This module also supports adding a start up delay that can delay injection of the gadget to
-avoid checks run at startup time, loading arbitrary libraries and child gating.
+Config files are stored at `/data/local/tmp/libsec/`:
 
-Please take a look at the [configuration guide](docs/advanced_config.md) for this.
+| File | Purpose |
+|------|---------|
+| `config.json` | Target apps, delay, child gating settings |
+| `libsecmon.config.so` | Frida gadget config (listen/script mode) |
+| `libsecmon.so` | Frida gadget binary (auto-installed) |
 
-## How to build
+Example `config.json`:
+```json
+{
+    "targets": [
+        {
+            "app_name": "com.example.app",
+            "enabled": true,
+            "kernel_assisted_evasion": false,
+            "start_up_delay_ms": 0,
+            "injected_libraries": [
+                { "path": "/data/local/tmp/libsec/libsecmon.so" }
+            ],
+            "child_gating": {
+                "enabled": false,
+                "mode": "freeze",
+                "injected_libraries": []
+            }
+        }
+    ]
+}
+```
 
-- Checkout the project
-- Run `./gradlew :module:assembleRelease`
-- The build magisk module should then be in the `out` directory.
+## Building
 
-You can also build and install the module to your device directly with `./gradlew :module:flashAndRebootZygiskRelease`
+```shell
+./gradlew :module:assembleRelease
+```
 
-## Caveats
+Output ZIP will be in the `out/` directory.
 
-- For emulators this will start the gadget in native realm. This means that you will be able to hook Java but not native functions.
+To build, install and reboot directly:
+```shell
+./gradlew :module:flashAndRebootZygiskRelease
+```
 
 ## Credits
 
 - [lico-n](https://github.com/lico-n) — Original author of [ZygiskFrida](https://github.com/lico-n/ZygiskFrida)
 - [electrondefuser](https://github.com/electrondefuser) — Library remapper, child gating, advanced config system
-- Inspired by https://github.com/Perfare/Zygisk-Il2CppDumper
-- https://github.com/hexhacking/xDL
-
+- [xDL](https://github.com/hexhacking/xDL)
+- Inspired by [Zygisk-Il2CppDumper](https://github.com/Perfare/Zygisk-Il2CppDumper)
