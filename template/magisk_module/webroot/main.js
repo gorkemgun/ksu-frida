@@ -39,7 +39,7 @@ async function loadConfig() {
 async function saveConfig() {
     var json = JSON.stringify(config, null, 4);
     var escaped = json.replace(/'/g, "'\\''");
-    var r = await exec("echo '" + escaped + "' > " + CONFIG_PATH);
+    var r = await exec("echo '" + escaped + "' > " + CONFIG_PATH + " && chmod 644 " + CONFIG_PATH);
     if (r.errno === 0) {
         ksu.toast("Config saved");
     } else {
@@ -65,7 +65,7 @@ async function loadGadgetConfig() {
 async function saveGadgetConfig() {
     var content = document.getElementById("gadget-editor").value;
     var escaped = content.replace(/'/g, "'\\''");
-    var r = await exec("echo '" + escaped + "' > " + GADGET_CONFIG_PATH);
+    var r = await exec("echo '" + escaped + "' > " + GADGET_CONFIG_PATH + " && chmod 644 " + GADGET_CONFIG_PATH);
     if (r.errno === 0) {
         ksu.toast("Gadget config saved");
         loadGadgetConfig();
