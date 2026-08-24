@@ -55,6 +55,7 @@
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 8px;
+            overflow: hidden;
         }
 
         .target:last-child { margin-bottom: 0; }
@@ -63,9 +64,32 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            min-width: 0;
         }
 
         .row-gap { gap: 8px; }
+
+        .target-name {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .target-name strong,
+        .target-name .pkg {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .target-name .pkg {
+            font-size: 11px;
+            color: var(--text2);
+        }
+
+        .target-actions {
+            flex-shrink: 0;
+        }
 
         .field { margin-top: 10px; }
         .field label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }

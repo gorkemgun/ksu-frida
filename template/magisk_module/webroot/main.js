@@ -115,6 +115,14 @@ function getAppLabel(pkg) {
     return appLabels[pkg] || pkg;
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
 // ── Render ───────────────────────────────────────────────────────────────────
 function renderTargets() {
     var container = document.getElementById("targets");
@@ -145,12 +153,14 @@ function renderTargets() {
         }
 
         var libs = t.injected_libraries.map(function (l) { return l.path; }).join("\n");
+        var label = getAppLabel(t.app_name);
 
         div.innerHTML =
             '<div class="row">' +
-                '<div><strong>' + getAppLabel(t.app_name) + '</strong>' +
-                '<div style="font-size:11px;color:var(--text2)">' + t.app_name + '</div></div>' +
-                '<div class="row row-gap">' +
+                '<div class="target-name" title="' + escapeHtml(label + "\n" + t.app_name) + '">' +
+                '<strong>' + escapeHtml(label) + '</strong>' +
+                '<div class="pkg">' + escapeHtml(t.app_name) + '</div></div>' +
+                '<div class="row row-gap target-actions">' +
                     '<label class="switch"><input type="checkbox"' + (t.enabled ? " checked" : "") +
                     ' onchange="updateField(' + i + ',\'enabled\',this.checked)"><span class="slider"></span></label>' +
                     '<button class="btn btn-danger btn-sm" onclick="removeTarget(' + i + ')">X</button>' +
